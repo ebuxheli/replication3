@@ -459,6 +459,26 @@ plot(p2, position = c(0.5, 0, 1, 1))
 ```
 Within-state relationship between proportion slave in 1850 in a county and percentage voting for Unionist candidates in 1851 in that county. Both Howell Cobb and Henry Foote were running against strong States’ Rights supporters in the aftermath of the Compromise of 1850. Higher values on each y-axis indicate more moderate voting with regard to slavery and secession.
 
+# Table 6
+```{r, results = 'asis'}
+# Running the models to be fed into Stargazer
+young.dem.1860 <- glm(update(base1860.form, dem ~ . + as.factor(year)*state.abb), 
+                      data = s.whites, family=binomial(), weights = weights, subset = year - age > 1965)
+young.dem.1860.rse <- robust.se(young.dem.1860, clvar = "fips")
+young.aff.1860 <- glm(update(base1860.form, affirm ~ . + as.factor(year)*state.abb), 
+                      data = s.whites, family=binomial(), weights = weights, subset = year - age > 1965)
+young.aff.1860.rse <- robust.se(young.aff.1860, clvar = "fips")
+young.resent.1860 <- lm(update(base1860.form, resent ~ . + as.factor(year)*state.abb), 
+                        data = s.whites, weights = weights, subset = year - age > 1965)
+young.resent.1860.rse <- robust.se(young.resent.1860, clvar = "fips")
+
+# Outputting table 6 using the models above
+young.tab <- stargazer(young.dem.1860, young.aff.1860, young.resent.1860,
+          keep = "pslave1860", style = "apsr", omit.stat = c("ll", "adj.rsq", "F", "ser", "bic", "aic"),
+          se = list(young.dem.1860.rse[,2],young.aff.1860.rse[,2], young.resent.1860.rse[,2]),
+          covariate.labels = c("Prop. Slave, 1860", "1st/2nd Generation Immigrant", "Prop. Slave $\\times$ 1st/2nd Gen. Imm."), dep.var.labels = c("Prop Democrat", "Affirm. Action", "Racial Resentment"), column.sep.width = "5pt", float = FALSE, header = FALSE, add.lines = list(rep("", 4), ch.row("State-Year Fixed Effects", rep(c(TRUE),3)), ch.row("1860 Covariates", rep(TRUE, 3)), rep("", 4)), multicolumn = FALSE)
+```
+Note. All models are at the individual level, with standard errors, in parentheses, clustered on county and weighted by CCES survey weights.
 
 
 
