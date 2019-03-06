@@ -2,7 +2,7 @@
 title: "Replication 3"
 author: "Enxhi Buxheli"
 date: "3/5/2019"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -24,6 +24,7 @@ library(lme4)
 library(cem)
 library(latticeExtra)
 library(stringr)
+library(gt)
 
 
 # Not quite sure what this panel-utils.R file does, looks like it's a function
@@ -94,7 +95,7 @@ ch.row <- function(name, yesno) {
 ```
 
 # Reading in the data
-```{r, cache = TRUE}
+```{r readcsv, cache = TRUE}
 # Consider changing to read_csv
 # The below reads in all of csv files
 countydata <- read.csv("dataverse_files/abs-jop-countydata.csv", stringsAsFactors = FALSE)
@@ -109,7 +110,7 @@ nes.comb <- read.csv("dataverse_files/abs-jop-nes-ind.csv", stringsAsFactors = F
 ```
 
 # Cleaning up the data
-```{r}
+```{r cleanup}
 # List of slavery states from the south 
 st.list <- c("AL", "AR", "GA", "FL", "KY", "LA", "MS", "MO", "NC", "SC", "TN", "TX", "VA","WV")
 
@@ -169,7 +170,7 @@ ns.blacks$state.abb <- factor(ns.blacks$state.abb)
 ```
 
 # Loading in some formulas
-```{r, results = 'asis'}
+```{r formulas, results = 'asis'}
 # Creating some formulas to be used in later linear regressions
 # Formula for looking at all the 1860 Census data
 base1860.form <- formula(. ~ pslave1860 + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2)+ rugged  + land.ineq1860 + sfarmprop1860 + log(totpop1860) + log(fvalpac1860) + log(acimp1860) + fbprop1860  + rail1860 + water1860 + state.abb)
@@ -197,7 +198,7 @@ base.first.form <- formula(pslave1860 ~ cottonsuit + log(coarea00) + rugged + la
 rform.form <- formula(. ~  cottonsuit + log(coarea00) + rugged + latitude + I(latitude^2)+ longitude + I(longitude^2)  + water1860+  state.abb)
 ```
 # Figure 2
-```{r}
+```{r f2}
 # Figure 2 
 # Setting the parameters for the plots
 par(mfrow = c(1,4), mar = 0.1 + c(4, 3, 2, 0.5), cex.main = 1)
@@ -241,6 +242,251 @@ with(subset(nes.counties, state.abb %in% st.list),
           main = "White - Black Therm. Score", las = 1, xlim = c(0, 0.9)))
 abline(lm(I(wtherm-btherm) ~ pslave1860, weights = sample.size.bt, data = subset(nes.counties, state.abb %in% st.list)), lwd = 2, col = "#AA0000")
 ```
+
+# Table 1
+```{r t1, results = 'asis'}
+# Using the formulas from above to create linear models used in the creation of
+# Table 1 on the county level
+cnty.res <- lm(dem ~ pslave1860, data = south.counties, weights = sample.size)
+cnty.res.fe <- lm(dem ~ pslave1860 + state.abb, data = south.counties, weights = sample.size)
+cnty.res.full <- lm(update(base1860.form, dem ~ .), data = south.counties, weights = sample.size)
+cnty.aff <- lm(affirm ~ pslave1860, data = south.counties, weights = sample.size)
+cnty.aff.fe <- lm(affirm ~ pslave1860 + state.abb, data = south.counties, weights = sample.size)
+cnty.aff.full <- lm(update(base1860.form, affirm ~ .), data = south.counties, weights = sample.size)
+cnty.resent <- lm(resent ~ pslave1860, data = south.counties, weights = sample.size.res)
+cnty.resent.fe <- lm(resent ~ pslave1860 +  state.abb, data = south.counties, weights = sample.size.res)
+cnty.resent.full <- lm(update(base1860.form, resent ~ .), data = south.counties, weights = sample.size.res)
+
+## NES Individual Results
+# Using the formulas from above to create linear models with standard errors used in the creation of
+# Table 1 on the individual level
+therm.mod <- lm(therm.diff ~ pslave1860, data = ns.whites, weights = weight)
+therm.mod.rse <- robust.se(therm.mod, clvar = "fips")
+
+therm.mod.fe <- lm(therm.diff ~ pslave1860 + state.abb*as.factor(year), data = ns.whites, weights = weight)
+therm.mod.fe.rse <- robust.se(therm.mod.fe, clvar = "fips")
+
+therm.1860 <- lm(update(base1860.form, therm.diff ~ . + state.abb*as.factor(year)), data = ns.whites, weights = weight)
+therm.1860.rse <- robust.se(therm.1860, clvar = "fips")
+
+# Outputs the complete table 1 with all of the models inputted from the 
+# formulas above
+tab1.alt <- stargazer(cnty.res, cnty.res.full, cnty.aff.full, cnty.resent.full, therm.1860,
+                      se = list(NULL, NULL, NULL, NULL, therm.1860.rse[,2]),
+                      keep = "pslave1860", style = "apsr", omit.stat = c("adj.rsq","ll", "F", "ser"),
+                      covariate.labels = c("Prop. Slave, 1860"), 
+                      dep.var.labels = c("Prop Democrat", "Affirm. Action", "Racial Resentment"),
+                      column.sep.width = "5pt", float = FALSE, header = FALSE, 
+                      add.lines = list(rep("", 4), 
+                                       c("Level", "County", "County", "County", "County", "Individual"),
+                                       ch.row("1860 Covariates", c(FALSE, rep(TRUE,3), FALSE)), 
+                                       ch.row("State Fixed Effects", c(FALSE, rep(TRUE,4))),
+                                       ch.row("State-Year Fixed Effects", c(rep(FALSE,4), TRUE)),
+                                       ch.row("Clustered SEs", c(rep(FALSE,4), TRUE)), rep("", 4)),
+                      multicolumn = TRUE)
+```
+Note. Models 1–4 are weighted least squares at the county level, with within-county sample sizes, adjusted by sampling weights, as weights. Model 5 is weighted least squares at the individual level with state-year fixed effects. Standard errors, in parentheses, are clustered at the county level in model 5. There are 50 counties in model 5.
+
+# Table 2
+```{r t2, results = 'asis'}
+## Neighbor matching
+cnty.res.neighbor <- lm(update(base1860.form, dem ~ .),
+                        data = south.counties, weights = sample.size, subset = nmatch.diff.20 == 1)
+cnty.aff.neighbor <- lm(update(base1860.form, affirm ~ .), 
+                        data = south.counties, weights = sample.size, subset = nmatch.diff.20 == 1)
+cnty.resent.neighbor <- lm(update(base1860.form, resent ~ .), 
+                           data = south.counties, weights = sample.size.res, subset = nmatch.diff.20 == 1)
+
+## Matching (Non-slave south versus north)
+## Note that there will be some slight deviation from the results in
+## the paper due to the random nature of k2k matching in this context
+mdata <- wh.counties[which(!(wh.counties$state.abb %in% st.list) | wh.counties$pslave < 0.05),]
+mdata <- mdata[which(!(mdata$state.abb %in% c("MD", "DE"))), ]
+mvars <- c("dem", "affirm", "resent","south", "fvalpc1860", 
+           "fbprop1860", "totpop1860", "longitude", "latitude", "coarea00")
+mdata$south <- 1 * (mdata$state.abb %in% st.list)
+mout <- cem("south", data = mdata[,mvars], drop = c("dem", "affirm", "resent"), k2k = TRUE)
+
+match.dem <- lm(update(base1860.form, dem ~ south + . - pslave1860 - state.abb), data = mdata, weights = sample.size, subset = mout$w > 0)
+
+match.aff <- lm(update(base1860.form, affirm ~ south + . - pslave1860 - state.abb), data = mdata, weights = sample.size, subset = mout$w > 0)
+
+match.resent <- lm(update(base1860.form, resent ~ south + . - pslave1860 - state.abb), data = mdata, weights = sample.size.res, subset = mout$w > 0)
+
+match.tab <- stargazer(cnty.res.neighbor, match.dem, cnty.aff.neighbor, 
+                       match.aff, cnty.resent.neighbor, match.resent,
+                       dep.var.labels = c("Prop Democrat", "Affirm. Action", "Racial Resentment"), 
+                       keep = c("pslave1860","south"), 
+                       covariate.labels = c("Prop. Slave, 1860","Slave State"),
+                       style = "apsr", omit.stat = c("ll", "adj.rsq", "F", "ser"), 
+                       column.sep.width = "0pt", float = FALSE, header = FALSE, 
+                       add.lines = list(rep("", 7), ch.row("State Fixed Effects", rep(c(TRUE,FALSE),3)),
+                                        ch.row("1860 Covariates", rep(TRUE, 6)), 
+                                        ch.row("50\\% Threshold Match", rep(c(TRUE,FALSE), 3)),
+                                        ch.row("North-South Match", rep(c(FALSE,TRUE), 3)), 
+                                        rep("", 7)), 
+                       multicolumn = TRUE)
+
+```
+# Table 3
+```{r t3, results = 'asis'}
+cnty.res.blk70.ptbias <- lm(update(base1860.form, dem ~ . + blkprop70), 
+                            data =south.counties, weights = sample.size)
+cnty.res.blk00.ptbias <- lm(update(base1860.form, dem ~ . + blkprop00), 
+                            data =south.counties, weights = sample.size)
+cnty.aff.blk70.ptbias <- lm(update(base1860.form, affirm ~ . + blkprop70), 
+                            data = south.counties, weights = sample.size)
+cnty.aff.blk00.ptbias <- lm(update(base1860.form, affirm ~ . + blkprop00), 
+                            data = south.counties, weights = sample.size)
+cnty.resent.blk70.ptbias <- lm(update(base1860.form, resent ~ . + blkprop70), 
+                               data = south.counties, weights = sample.size.res)
+cnty.resent.blk00.ptbias <- lm(update(base1860.form, resent ~ . + blkprop00), 
+                               data = south.counties, weights = sample.size.res)
+cnty.dem.blk00.first <- lm(update(base1860.form, dem ~ . + blkprop00 +log(totpop00) +highsch90 + unemp + log(medinc00) + wbincratio00), data =south.counties, weights = sample.size)
+cnty.dem.blk00.iv <- ivreg(update(base.iv.form, I(dem - coef(cnty.dem.blk00.first)["blkprop00"]*blkprop00) ~ .), data = south.counties, weights = sample.size)
+cnty.dem.blk00 <- lm(update(base1860.form, I(dem - coef(cnty.dem.blk00.first)["blkprop00"]*(blkprop00)) ~ .), data =south.counties, weights = sample.size)
+cnty.aff.blk00.first <- lm(update(base1860.form, affirm ~ . + blkprop00 +log(totpop00) +highsch90 + unemp + log(medinc00) + wbincratio00), data =south.counties, weights = sample.size)
+cnty.aff.blk00.iv <- ivreg(update(base.iv.form, I(affirm - coef(cnty.aff.blk00.first)["blkprop00"]*blkprop00) ~ .), data = south.counties, weights = sample.size)
+cnty.aff.blk00 <- lm(update(base1860.form, I(affirm - coef(cnty.aff.blk00.first)["blkprop00"]*(blkprop00)) ~ .), data =south.counties, weights = sample.size)
+cnty.resent.blk00.first <- lm(update(base1860.form, resent ~ . + blkprop00 +log(totpop00) +highsch90 + unemp + log(medinc00) + wbincratio00), data =south.counties, weights = sample.size.res)
+cnty.resent.blk00.iv <- ivreg(update(base.iv.form, I(resent - coef(cnty.resent.blk00.first)["blkprop00"]*blkprop00) ~ .), data = south.counties, weights = sample.size.res)
+cnty.resent.blk00 <- lm(update(base1860.form, I(resent - coef(cnty.resent.blk00.first)["blkprop00"]*(blkprop00)) ~ .), data =south.counties, weights = sample.size.res)
+
+## bootstrap the SEs
+set.seed(6251983)
+boots <- 1000
+cnty.dem.blk00.boots <- rep(NA, times = boots)
+cnty.aff.blk00.boots <- rep(NA, times = boots)
+cnty.resent.blk00.boots <- rep(NA, times = boots)
+for (b in 1:boots) {
+  sc.star <- south.counties[sample(1:nrow(south.counties), replace = TRUE),]
+  boot.dem.first <- lm(update(base1860.form, dem ~ . + blkprop00 +log(totpop00) +highsch90 + unemp + log(medinc00) + wbincratio00), data =sc.star, weights = sample.size)
+  boot.dem  <- lm(update(base1860.form, I(dem - coef(boot.dem.first)["blkprop00"]*(blkprop00)) ~ .), 
+                  data =sc.star, weights = sample.size)
+  cnty.dem.blk00.boots[b] <- coef(boot.dem)["pslave1860"]
+
+  boot.aff.first <- lm(update(base1860.form, affirm ~ . + blkprop00 +log(totpop00) +highsch90 + unemp + log(medinc00) + wbincratio00), data =sc.star, weights = sample.size)
+  boot.aff  <- lm(update(base1860.form, I(affirm - coef(boot.aff.first)["blkprop00"]*(blkprop00)) ~ .), 
+                  data =sc.star, weights = sample.size)
+  cnty.aff.blk00.boots[b] <- coef(boot.aff)["pslave1860"]
+
+  boot.resent.first <- lm(update(base1860.form, resent ~ . + blkprop00 +log(totpop00) +highsch90 + unemp + log(medinc00) + wbincratio00), data =sc.star, weights = sample.size.res)
+  boot.resent <- lm(update(base1860.form, I(resent - coef(boot.resent.first)["blkprop00"]*(blkprop00)) ~ .),
+                    data =sc.star, weights = sample.size.res)
+  cnty.resent.blk00.boots[b] <- coef(boot.resent)["pslave1860"]
+}
+
+# Put bootstrapped SEs into a holder (we don't calculate the BSE for
+# the other coefficients since we don't care about them and don't
+# report them in the paper)
+dem.bse <- summary(cnty.dem.blk00)$coef[,2]
+dem.bse["pslave1860"] <- sd(cnty.dem.blk00.boots)
+aff.bse <- summary(cnty.aff.blk00)$coef[,2]
+aff.bse["pslave1860"] <- sd(cnty.aff.blk00.boots)
+resent.bse <- summary(cnty.resent.blk00)$coef[,2]
+resent.bse["pslave1860"] <- sd(cnty.resent.blk00.boots)
+
+blkprop.tab <- stargazer(cnty.res.blk00.ptbias, cnty.dem.blk00, cnty.aff.blk00.ptbias, cnty.aff.blk00, cnty.resent.blk00.ptbias, cnty.resent.blk00,
+          keep = c("pslave1860", "blkprop00"), style = "apsr", omit.stat = c("ll", "adj.rsq", "F", "ser"), se = list(NULL, dem.bse, NULL, aff.bse, NULL, resent.bse),
+          covariate.labels = c("Prop. Slave, Direct Effect", "Prop. Black, 2000"), 
+          dep.var.labels = c("Prop Democrat", "Affirm. Action", "Racial Resentment"), 
+          column.sep.width = "5pt", float = FALSE, header = FALSE, 
+          add.lines = list(rep("", 7), ch.row("State Fixed Effects", rep(TRUE, 6)), 
+                           ch.row("1860 Covariates", rep(TRUE, 6)), 
+                           ch.row("Bootstrapped SEs", rep(c(FALSE,TRUE), 3)), 
+                           c("Model", rep(c("WLS", "Seq. g-est."), 3)), rep("", 7)), 
+          multicolumn = TRUE)
+```
+Note. Columns 1, 3, and 5 simply include proportion black in the year 2000 as an additional control to the baseline specification from table 1. Columns 2, 4, and 6 use sequential g-estimation (Seq, g-est) of Vansteelandt (2009). WLS p weighted least squares. Standard errors are in parentheses.
+
+```{r}
+
+# ## Appendix Table
+# seqg.tab <- stargazer(cnty.dem.blk00.first, cnty.aff.blk00.first, cnty.resent.blk00.first,
+#                       keep = c("pslave1860", "blkprop00", "totpop00", "highsch90",
+#                                "unemp","medinc","wbincratio"), 
+#                       style = "apsr", omit.stat = c("ll", "adj.rsq", "F", "ser"),
+#                       covariate.labels = c("Prop. Slave, 1860","Prop. Black 2000", "Log Population, 2000",
+#                                            "Percent High School Graduates, 1990", "Unemployment, 1999", 
+#                                            "Median Income, 2000", "White-Black Income Ratio, 2000"),
+#                       dep.var.labels = c("Prop Democrat", "Affirm. Action", "Racial Resentment"),
+#                       column.sep.width = "5pt", float = FALSE, header = FALSE, 
+#                       add.lines = list(rep("", 4), ch.row("State Fixed Effects", rep(TRUE, 3)), 
+#                                        ch.row("1860 Covariates", rep(TRUE, 3)), rep("", 4)), 
+#                       multicolumn = FALSE)
+# 
+# ## antebellum results
+# cnty.dem.houses <- lm(update(base1860.form, dem ~ . + slavesperhouse), 
+#                       data = south.counties, weights = sample.size)
+# cnty.aff.houses <- lm(update(base1860.form, affirm ~ . + slavesperhouse), 
+#                       data = south.counties, weights = sample.size)
+# cnty.resent.houses <- lm(update(base1860.form, resent ~ . + slavesperhouse), 
+#                          data = south.counties, weights = sample.size.res)
+# cnty.dem.mortrate <- lm(update(base1860.form, dem ~ . + I(log(s.mortrate/w.mortrate))), 
+#                         data = south.counties, weights = sample.size, subset = s.mortrate > 0)
+# cnty.aff.mortrate <- lm(update(base1860.form, affirm ~ . + I(log(s.mortrate/w.mortrate))), 
+#                         data = south.counties, weights = sample.size, subset = s.mortrate > 0)
+# cnty.resent.mortrate <- lm(update(base1860.form, resent ~ . + I(log(s.mortrate/w.mortrate))), 
+#                            data = south.counties, weights = sample.size.res, subset = s.mortrate > 0)
+# 
+# ante.tab <- stargazer(cnty.dem.mortrate, cnty.dem.houses, cnty.aff.mortrate, 
+#                       cnty.aff.houses, cnty.resent.mortrate, cnty.resent.houses,
+#                       keep = c("pslave1860", "mortrate", "slavesperhouse"), 
+#                       style = "apsr", omit.stat = c("ll", "adj.rsq", "F", "ser"),
+#                       covariate.labels = c("Prop. Slave, 1860", "Log Relative Slave Mortality, 1860", 
+#                                            "Avg. Residents per Slave Dwelling"), 
+#                       dep.var.labels = c("Prop Democrat", "Affirm. Action", "Racial Resentment"),
+#                       column.sep.width = "5pt", float = FALSE, header = FALSE, 
+#                       add.lines = list(rep("", 7), ch.row("State Fixed Effects", rep(TRUE, 6)), 
+#                                        ch.row("1860 Covariates", rep(TRUE, 6)), rep("", 7)), 
+#                       multicolumn = FALSE)
+
+# ## 1851 Gubernatorial elections in MS and GA
+# ## see txt files accompanying these csv files for codebooks
+# ## Data comes from ICPSR 00001
+# 
+# ga.votes <- read.csv("dataverse_files/ga-votes-1824-1860.csv", stringsAsFactors = FALSE)
+# ga.votes$cfips <- strtrim(ga.votes$V3, nchar(ga.votes$V3)-1)
+# ga.votes$fips <- as.numeric(paste(13, str_pad(ga.votes$cfips, 3, side = "left", pad = "0"), sep = ""))
+# is.na(ga.votes) <- ga.votes == 9999999
+# ga.votes$howell1851 <- ga.votes$V345/ga.votes$V348
+# 
+# 
+# ga.votes <- merge(ga.votes, countydata, by = "fips", all.x = TRUE, all.y = FALSE)
+# 
+# 
+# lattice::xyplot(howell1851 ~ sprop1850, data = ga.votes, subset = state.abb %in% st.list , pch = 16, lwd = 4, col.line = "indianred", col = dodgerblue.30, xlab = "Proportion Slave, 1850", ylab = "Howell Cobb Vote-share, 1851", panel =
+#                     function(x,y,...) {  panel.xyplot(x, y, ...)
+#                                          panel.smoother(x,y,method = "loess", col = "indianred", lwd = 4)})
+# 
+# 
+# ms.votes <- read.csv("dataverse_files/ms-votes-1824-1860.csv", stringsAsFactors = FALSE)
+# ms.votes$cfips <- strtrim(ms.votes$V3, nchar(ms.votes$V3)-1)
+# ms.votes$fips <- as.numeric(paste(28, str_pad(ms.votes$cfips, 3, side = "left", pad = "0"), sep = ""))
+# is.na(ms.votes) <- ms.votes == 9999999
+# ms.votes$foote1851 <- ms.votes$V187/ms.votes$V190
+# 
+# ms.votes <- merge(ms.votes, countydata, by = "fips", all.x = TRUE, all.y = FALSE)
+# 
+# 
+# lattice::xyplot(foote1851 ~ sprop1850, data = ms.votes, subset = state.abb %in% st.list , pch = 16, lwd = 4, col.line = "indianred", col = dodgerblue.30, xlab = "Proportion Slave, 1850", ylab = "Henry Foote Vote-share, 1851", panel =
+#                     function(x,y,...) {  panel.xyplot(x, y, ...)
+#                                          panel.smoother(x,y,method = "loess", col = "indianred", lwd = 4)})
+# 
+# 
+# #cairo_pdf(filename = "figs/ms-ga-1851-vote.pdf", family = "Minion Pro", height = 4.5, width = 9, pointsize = 11)
+# p1 <- lattice::xyplot(howell1851 ~ sprop1850, data = ga.votes, subset = state.abb %in% st.list , pch = 16, lwd = 4, ylim = c(0,1), col.line = "indianred", main = "Georgia Gubernatorial Election, 1851", col = dodgerblue.30, xlab = "Proportion Slave, 1850", ylab = "Howell Cobb Vote-share, 1851", panel =
+#                     function(x,y,...) {  panel.xyplot(x, y, ...)
+#                                          panel.smoother(x,y,method = "loess", col = "indianred", lwd = 4)})
+# p2 <- lattice::xyplot(foote1851 ~ sprop1850, data = ms.votes, subset = state.abb %in% st.list , pch = 16, lwd = 4, ylim = c(0,1), col.line = "indianred", main = "Mississippi Gubernatorial Election, 1851", col = dodgerblue.30, xlab = "Proportion Slave, 1850", ylab = "Henry Foote Vote-share, 1851", panel =
+#                     function(x,y,...) {  panel.xyplot(x, y, ...)
+#                                          panel.smoother(x,y,method = "loess", col = "indianred", lwd = 4)})
+# plot(p1, position = c(0.0, 0, 0.49, 1), more = TRUE)
+# plot(p2, position = c(0.5, 0, 1, 1))
+```
+
+
+
 
 
 
