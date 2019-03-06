@@ -26,7 +26,6 @@ library(latticeExtra)
 library(stringr)
 library(gt)
 
-
 # Not quite sure what this panel-utils.R file does, looks like it's a function
 # file along with some formatting stuff such as colors added
 source("dataverse_files/panel-utils.R")
