@@ -129,21 +129,18 @@ others  <- cces.comb[which(cces.comb$white  != 1 & cces.comb$black != 1 & cces.c
 # Also grouping by the same groups as above where s.GROUP is just an indicator
 # that the grouping is of southerners.
 southerners <- subset(cces.comb, abs.sample == 1)
-s.whites <- subset(whites, abs.sample == 1)
-s.blacks <- subset(blacks, abs.sample == 1)
-s.latinos <- subset(latinos, abs.sample == 1)
-s.whites$state.abb <- factor(s.whites$state.abb)
-s.blacks$state.abb <- factor(s.blacks$state.abb)
+s.whites    <- subset(whites,    abs.sample == 1)
+s.blacks    <- subset(blacks,    abs.sample == 1)
+s.latinos   <- subset(latinos,   abs.sample == 1)
+s.whites$state.abb  <- factor(s.whites$state.abb)
+s.blacks$state.abb  <- factor(s.blacks$state.abb)
 s.latinos$state.abb <- factor(s.latinos$state.abb)
 
 ## County-level data
+# Creating dataset of all the southern and cleaning it up
 south.counties <- subset(wh.counties, abs.sample == 1)
 south.counties$state.abb <- factor(south.counties$state.abb)
 south.counties <- south.counties[order(as.numeric(south.counties$fips)),]
-
-nrow(s.whites)
-sum(countydata$state.abb %in% st.list)
-dim(south.counties)
 ```
 
 
