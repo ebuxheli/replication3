@@ -407,6 +407,107 @@ blkprop.tab <- stargazer(cnty.res.blk00.ptbias, cnty.dem.blk00, cnty.aff.blk00.p
 ```
 Note. Columns 1, 3, and 5 simply include proportion black in the year 2000 as an additional control to the baseline specification from table 1. Columns 2, 4, and 6 use sequential g-estimation (Seq, g-est) of Vansteelandt (2009). WLS = weighted least squares. Standard errors are in parentheses.
 
+# Figure 4
+```{r, results = 'asis'}
+## Most county boundaries are set by 1925 or so.
+## variables without the 1860 suffix are based on the 1860 county
+## boundaries
+pres.form <- formula(. ~ sprop + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2)+ rugged  + land.ineq + sfarmprop + log(totpop) + log(fvalpc) + log(acimp) + fbprop  + rail + water + state.abb)
+pres.iv.form <- Formula(. ~ sprop + log(coarea00) + rugged + latitude + I(latitude^2) + longitude + I(longitude^2)  + water  + state.abb | cottonsuit + log(coarea00) + rugged  + latitude + I(latitude^2) + longitude + I(longitude^2) + water  + state.abb)
+year.list <- seq(1840, 1964, by = 4)
+outvars <- paste("pdem", year.list, sep = "")
+pdemcoefs <- matrix(NA, nrow = length(outvars), ncol = 3)
+pdemcoefs.nox <- matrix(NA, nrow = length(outvars), ncol = 3)
+pdemcoefs.iv <- matrix(NA, nrow = length(outvars), ncol = 3)
+pdemcoefs.rfns <- matrix(NA, nrow = length(outvars), ncol = 3)
+pdemcoefs.rf <- matrix(NA, nrow = length(outvars), ncol = 3)
+for (y in 1:length(outvars)) {
+  if (!(outvars[y] %in% c("pdem1864", "pdem1868"))) {
+    ## OLS
+    ff <- as.formula(paste(outvars[y], " ~ ."))
+    if (year.list[y] < 1924) {
+      thismod <- lm(update(pres.form, ff), data = countydata, subset = state.abb %in% st.list)
+    } else {
+      thismod <- lm(update(base1860.form, ff), data = countydata, subset = state.abb %in% st.list)
+    }
+    pdemcoefs[y,1] <- 0.25*coef(thismod)[2]
+    pdemcoefs[y,2:3] <- 0.25*confint(thismod)[2,]
+    ## Only state FEs
+    if (year.list[y] < 1924) {
+      ff <- as.formula(paste(outvars[y], " ~ sprop + state.abb"))
+    } else {
+      ff <- as.formula(paste(outvars[y], " ~ pslave1860 + state.abb"))
+    }
+    thismod <- lm(ff, data = countydata, subset = state.abb %in% st.list)
+    pdemcoefs.nox[y,1] <- 0.25*coef(thismod)[2]
+    pdemcoefs.nox[y,2:3] <- 0.25*confint(thismod)[2,]
+    ## IV
+    if (year.list[y] < 1924) {
+      ff <- update(pres.iv.form, as.formula(paste(outvars[y], "~ . | .")))
+    } else {
+      ff <- update(base.iv.form, as.formula(paste(outvars[y], "~ . | .")))
+    }
+    thismod <- ivreg(ff, data = countydata, subset = state.abb %in% st.list)
+    pdemcoefs.iv[y,1] <- coef(thismod)[2]
+    pdemcoefs.iv[y,2:3] <- confint(thismod)[2,]
+    ## Reduced form in the non-south
+    ff <- as.formula(paste(outvars[y], "~ cottonsuit + log(coarea00) + rugged+ latitude + I(latitude^2) + longitude + I(longitude^2)   + state.abb"))
+    thismod <- lm(ff, data = countydata, subset = !(state.abb %in% st.list) & !(state.abb %in% c("MD", "DE", "MO")))
+    pdemcoefs.rfns[y,1] <- coef(thismod)[2]
+    pdemcoefs.rfns[y,2:3] <- confint(thismod)[2,]
+    ## Reduced form in the south
+    thismod <- lm(ff, data = countydata, subset = state.abb %in% st.list)
+    pdemcoefs.rf[y,1] <- coef(thismod)[2]
+    pdemcoefs.rf[y,2:3] <- confint(thismod)[2,]
+  }
+  ## if (outvars[y] %in% c("pdem1860","pdem1864")) {
+  ##   pdemcoefs[y,1] <- NA
+  ##   pdemcoefs[y,2:3] <- NA
+  ##   pdemcoefs.iv[y,1] <- NA
+  ##   pdemcoefs.iv[y,2:3] <- NA
+  ## }
+  ## if (outvars[y] == "pdem1856") {
+  ##   pdemcoefs[y,1] <- NA
+  ##   pdemcoefs[y,2:3] <- NA
+  ## }
+}
+
+douglas.ols <- lm(update(pres.form, pdem1860 ~ .), data = countydata, subset = state.abb %in% st.list)
+douglas.iv <- ivreg(update(pres.iv.form, pdem1860 ~ .), data = countydata, subset = state.abb %in% st.list)
+
+wallace.ols <- lm(update(base1860.form, wallace68.alt ~ .), data = countydata, subset = state.abb %in% st.list)
+wallace.iv <- ivreg(update(base.iv.form, wallace68.alt ~ .), data = countydata, subset = state.abb %in% st.list)
+thurmond.ols <- lm(update(base1860.form, thurmond48 ~ .), data = countydata, subset = state.abb %in% st.list)
+thurmond.iv <- ivreg(update(base.iv.form, thurmond48 ~ .), data = countydata, subset = state.abb %in% st.list)
+obama.ols <- lm(update(base1860.form,  wht.obama.vote ~ .), data = countydata, subset = abs.sample == 1)
+obama.iv <- ivreg(update(base.iv.form, wht.obama.vote  ~ .), data = countydata, subset = abs.sample == 1)
+
+##cairo_pdf(file= "../figs/prescountyvote-iv.pdf", family = "Minion Pro", height = 4.5, width = 6.5, pointsize = 9)
+plot(x = year.list, y = 0.25*pdemcoefs.iv[,1], ylim = range(c(.25*pdemcoefs.iv,25*confint(obama.iv)["pslave1860",]), na.rm = TRUE), xlim=c(min(year.list),2016), xlab = "Year",
+     ylab = "Effect of Slavery on % Democrat", pch = 19, main = "Presidential Elections", bty = "n", yaxt = "n")
+abline(v = 1904, lty = 2, col = "grey70")
+text(x = 1904, y = 25*confint(obama.iv)["pslave1860",1]+0.5, "All states but KY have\nenacted poll taxes", pos = 4)
+abline(v = 1965, lty = 2, col = "grey70")
+text(x = 1965, y =  25*confint(obama.iv)["pslave1860",1]+0.5, "Voting Rights Act", pos = 4)
+axis(side = 2, las = 2, cex = 0.8)
+abline(h=0, col = "grey")
+segments(x0 = year.list, y0 = .25*pdemcoefs.iv[,2], y1 = .25*pdemcoefs.iv[,3])
+rect(xleft = 1860, xright = 1877, ybottom = -100, ytop=100, col = rgb(.5,.5,.5, alpha = 0.5), border = NA)
+text(x = 1860, y = max(.25*pdemcoefs.iv, na.rm=TRUE)-1, "Civil War\nBegins", pos = 2)
+text(x = 1877, y = max(.25*pdemcoefs.iv, na.rm=TRUE)-1, "Reconstruction\nEnds", pos = 4)
+points(x = 1968, y = .25*coef(wallace.iv)["pslave1860"], pch = 17, col = "indianred")
+segments(x0 = 1968, y0 = 0.25*confint(wallace.iv)["pslave1860",1], y1 = 0.25*confint(wallace.iv)["pslave1860",2], col = "indianred")
+text(x = 1968, y = 0.25*coef(wallace.iv)["pslave1860"], "Wallace\n1968", pos = 4, col = "indianred")
+points(x = 1949, y = .25*coef(thurmond.iv)["pslave1860"], pch = 17, col = "indianred")
+segments(x0 = 1949, y0 = 0.25*confint(thurmond.iv)["pslave1860",1], y1 = 0.25*confint(thurmond.iv)["pslave1860",2], col = "indianred")
+text(x = 1949, y = 0.35*confint(thurmond.iv)["pslave1860",2], "Thurmond\n1948", pos = 3, col = "indianred")
+segments(x0=1949, y0=0.35*confint(thurmond.iv)["pslave1860",2],y1=0.26*confint(thurmond.iv)["pslave1860",2], lty = 3, col = "grey70")
+points(x = 2008, y = 25*coef(obama.iv)["pslave1860"], pch = 19)
+segments(x0 = 2008, y0 = 25*confint(obama.iv)["pslave1860",1], y1 = 25*confint(obama.iv)["pslave1860",2])
+text(x = 2008, y = 25*coef(obama.iv)["pslave1860"], "Obama\n2008", pos = 4)
+```
+
+
 # Figure 5
 ```{r appendix, results = 'asis'}
 ## 1851 Gubernatorial elections in MS and GA
