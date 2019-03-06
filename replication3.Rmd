@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 # NOTE: Comments will be contrary to tidyverse styling as I do not include an
 # extra line to describe code chunk below comments
@@ -94,11 +94,18 @@ ch.row <- function(name, yesno) {
 ```
 
 # Reading in the data
-```{r}
+```{r, cache = TRUE}
 # Consider changing to read_csv
+# The below reads in all of csv files
 countydata <- read.csv("dataverse_files/abs-jop-countydata.csv", stringsAsFactors = FALSE)
 wh.counties <- read.csv("dataverse_files/abs-jop-cces-white-countydata.csv", stringsAsFactors = FALSE)
+
+# CCES data
 cces.comb <- read.csv("dataverse_files/abs-jop-cces-ind.csv", stringsAsFactors = FALSE)
+
+# ANES data
+nes.counties <- read.csv("dataverse_files/abs-jop-nes-white-countydata.csv", stringsAsFactors = FALSE)
+nes.comb <- read.csv("dataverse_files/abs-jop-nes-ind.csv", stringsAsFactors = FALSE)
 ```
 
 # Cleaning up the data
@@ -106,6 +113,7 @@ cces.comb <- read.csv("dataverse_files/abs-jop-cces-ind.csv", stringsAsFactors =
 # List of slavery states from the south 
 st.list <- c("AL", "AR", "GA", "FL", "KY", "LA", "MS", "MO", "NC", "SC", "TN", "TX", "VA","WV")
 
+## CCES (Cooperative Congressional Election Study) Data Results
 # Multiplying by 1 makes the boolean for if the person is in the south go from
 # TRUE/FALSE to being 1/0
 cces.comb$abs.sample   <- 1 * (cces.comb$state.abb   %in% st.list)
@@ -141,7 +149,100 @@ s.latinos$state.abb <- factor(s.latinos$state.abb)
 south.counties <- subset(wh.counties, abs.sample == 1)
 south.counties$state.abb <- factor(south.counties$state.abb)
 south.counties <- south.counties[order(as.numeric(south.counties$fips)),]
+
+
+## ANES (American National Election Survey) Data Results
+# Creating a boolean for if states are southern states and subsetting the results
+nes.counties$abs.sample <- 1 * (nes.counties$state.abb %in% st.list)
+nes.comb$abs.sample <- 1 * (nes.comb$state.abb %in% st.list)
+nes.whites <- nes.comb[which(nes.comb$white == 1),]
+nes.blacks <- nes.comb[which(nes.comb$black == 1),]
+
+## Individual-level analysis
+# Subsetting to only include southerners as determined by the boolean above
+# Also grouping by the same groups as above where ns.GROUP is just an indicator
+# that the grouping is of southerners from the ANES dataset.
+ns.whites <- subset(nes.whites, abs.sample == 1)
+ns.blacks <- subset(nes.blacks, abs.sample == 1)
+ns.whites$state.abb <- factor(ns.whites$state.abb)
+ns.blacks$state.abb <- factor(ns.blacks$state.abb)
 ```
+
+# Loading in some formulas
+```{r, results = 'asis'}
+# Creating some formulas to be used in later linear regressions
+# Formula for looking at all the 1860 Census data
+base1860.form <- formula(. ~ pslave1860 + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2)+ rugged  + land.ineq1860 + sfarmprop1860 + log(totpop1860) + log(fvalpac1860) + log(acimp1860) + fbprop1860  + rail1860 + water1860 + state.abb)
+
+# Formula for looking at the individual 1860 Census data
+ind.form <- formula(. ~ pslave1860   + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2) + rugged + land.ineq1860 + sfarmprop1860 + log(totpop1860) + log(fvalpac1860) + log(acimp1860) + fbprop1860 + rail1860 + water1860 + as.factor(educ) +  inc.cat +religion + female + age + state.abb*as.factor(year))
+
+# Formula for looking at the individual interative in the 1860 Census data
+ind.int.form <- formula(. ~ pslave1860   + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2) + rugged + land.ineq1860 + sfarmprop1860 + log(totpop1860) + log(fvalpac1860) + log(acimp1860) + fbprop1860 + rail1860 + water1860 + as.factor(educ)*pslave1860 + inc.cat*pslave1860 + religion*pslave1860 + female*pslave1860 + age*pslave1860  + state.abb*as.factor(year))
+
+# Adding in a formula for the context (year) in which the data was collected
+context.form <- formula(. ~ pslave1860   + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2) + rugged + land.ineq1860 + sfarmprop1860 + log(totpop1860) + log(fvalpac1860) + log(acimp1860) + fbprop1860 + rail1860 + water1860 + as.factor(educ) + inc.cat  +religion +female + age + blkprop.z00 + log(medinc.z10) + w.unemp.rate2014 + log(wbincratio2014) + state.abb*as.factor(year))
+context.int.form <- formula(. ~ pslave1860   + log(coarea00) + latitude + I(latitude^2) + longitude + I(longitude^2) + rugged + land.ineq1860 + sfarmprop1860 + log(totpop1860) + log(fvalpac1860) + log(acimp1860) + fbprop1860 + rail1860 + water1860 + as.factor(educ) +  inc.cat  +religion +female + age + blkprop.z00*pslave1860 + log(medinc.z10)*pslave1860 + w.unemp.rate2014*pslave1860 + log(wbincratio2014)*pslave1860 + state.abb*as.factor(year))
+
+## have to use Formula package for ivreg calls
+# ivreg: Instrumental-Variable Regression - estimate causal relationships when
+# controlled experiments are not feasible
+# Formula for looking at locational data
+base.iv.form <- Formula(. ~ pslave1860 + log(coarea00) + rugged + latitude + I(latitude^2) + longitude + I(longitude^2)  + water1860  + state.abb | cottonsuit + log(coarea00) + rugged  + latitude + I(latitude^2) + longitude + I(longitude^2) + water1860  + state.abb)
+
+# The not reduced form formula for the locational data
+base.first.form <- formula(pslave1860 ~ cottonsuit + log(coarea00) + rugged + latitude + I(latitude^2) + longitude + I(longitude^2)  +water1860 + state.abb)
+
+# Reduced form formula for the locational data - need to find out what that means in this context
+rform.form <- formula(. ~  cottonsuit + log(coarea00) + rugged + latitude + I(latitude^2)+ longitude + I(longitude^2)  + water1860+  state.abb)
+```
+# Figure 2
+```{r}
+# Figure 2 
+# Setting the parameters for the plots
+par(mfrow = c(1,4), mar = 0.1 + c(4, 3, 2, 0.5), cex.main = 1)
+
+# Plotting Proportion Slave, 1860 portion of the figure with x-axis having
+# proportion of slaves and y-axis having proportion of democrats along with
+# adding a line that correlates democrats with proportion of slaves in 1860
+plot(south.counties$pslave1860, south.counties$dem, 
+     pch = 19, col = "#33333333", xlab = "Proportion Slave, 1860", ylab = "", 
+     main = "Proportion Democrat", yaxt = "n", cex = south.counties$sample.size/100)
+axis(side = 2, las = 2)
+abline(lm(dem ~ pslave1860, data = south.counties, weights = sample.size), lwd = 2, col = "#AA0000")
+
+# Plotting Affirmative Action portion of the figure with x-axis having
+# proportion of slaves and y-axis having proportion with approval of affirmative
+# action along with adding a line that correlates affirmative action with
+# proportion of slaves in 1860
+plot(south.counties$pslave1860, south.counties$affirm, 
+     pch = 19, col = "#33333333", xlab = "Proportion Slave, 1860", ylab = "", 
+     main = "Affirmative Action", yaxt = "n", cex = south.counties$sample.size/100)
+axis(side = 2, las = 2)
+abline(lm(affirm ~ pslave1860, data = south.counties, weights = sample.size), lwd = 2, col = "#AA0000")
+
+# Plotting Racial Resentment portion of the figure with x-axis having proportion
+# of slaves and y-axis having proportion with racial resentment along with
+# adding a line that correlates racial resentment with proportion of slaves in
+# 1860
+plot(south.counties$pslave1860, south.counties$resent, 
+     pch = 19, col = "#33333333", xlab = "Proportion Slave, 1860", ylab="", 
+     main = "Racial Resentment", yaxt = "n", cex = south.counties$sample.size.res/75)
+axis(side = 2, las = 2)
+abline(lm(resent ~ pslave1860, data = south.counties, weights = sample.size.res), lwd = 2, col = "#AA0000")
+
+# Plotting Racial Thermometer portion of the figure with x-axis having
+# proportion of slaves and y-axis having thermometer scores along with adding a
+# line that correlates thermometer scores with proportion of slaves in 1860
+with(subset(nes.counties, state.abb %in% st.list), 
+     plot(pslave1860, wtherm-btherm, 
+          cex = sample.size.bt/40, pch = 19, col = "#33333333", 
+          xlab = "Proportion Slave, 1860", ylab = "", 
+          main = "White - Black Therm. Score", las = 1, xlim = c(0, 0.9)))
+abline(lm(I(wtherm-btherm) ~ pslave1860, weights = sample.size.bt, data = subset(nes.counties, state.abb %in% st.list)), lwd = 2, col = "#AA0000")
+```
+
+
 
 
 
