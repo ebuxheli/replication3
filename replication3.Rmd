@@ -37,7 +37,6 @@ indianred.30 <- rgb(205, 92, 92, 76.5, max = 255)
 indianred.75 <- rgb(205, 92, 92, 191, max = 255)
 ```
 
-## R Markdown
 ```{r state_cleanup, results = 'asis'}
 # Loading in the state FIPS encoding data
 data(state.fips)
@@ -55,7 +54,6 @@ rownames(fips.state) <- fips.state$fips
 data(county.fips)
 ```
 
-# Adding additional functions
 ```{r functions}
 ## The below is not the intended link, but I'm assuming that it's supposed to
 ## show that the clustering methods used in developing this standard error model
@@ -94,7 +92,6 @@ ch.row <- function(name, yesno) {
 }
 ```
 
-# Reading in the data
 ```{r readcsv, cache = TRUE}
 # Consider changing to read_csv
 # The below reads in all of csv files
@@ -109,7 +106,6 @@ nes.counties <- read.csv("dataverse_files/abs-jop-nes-white-countydata.csv", str
 nes.comb <- read.csv("dataverse_files/abs-jop-nes-ind.csv", stringsAsFactors = FALSE)
 ```
 
-# Cleaning up the data
 ```{r cleanup}
 # List of slavery states from the south 
 st.list <- c("AL", "AR", "GA", "FL", "KY", "LA", "MS", "MO", "NC", "SC", "TN", "TX", "VA","WV")
@@ -169,7 +165,6 @@ ns.whites$state.abb <- factor(ns.whites$state.abb)
 ns.blacks$state.abb <- factor(ns.blacks$state.abb)
 ```
 
-# Loading in some formulas
 ```{r formulas, results = 'asis'}
 # Creating some formulas to be used in later linear regressions
 # Formula for looking at all the 1860 Census data
@@ -197,6 +192,7 @@ base.first.form <- formula(pslave1860 ~ cottonsuit + log(coarea00) + rugged + la
 # Reduced form formula for the locational data - need to find out what that means in this context
 rform.form <- formula(. ~  cottonsuit + log(coarea00) + rugged + latitude + I(latitude^2)+ longitude + I(longitude^2)  + water1860+  state.abb)
 ```
+
 # Figure 2
 ```{r f2}
 # Figure 2 
@@ -305,7 +301,7 @@ mdata <- mdata[which(!(mdata$state.abb %in% c("MD", "DE"))), ]
 mvars <- c("dem", "affirm", "resent","south", "fvalpc1860", 
            "fbprop1860", "totpop1860", "longitude", "latitude", "coarea00")
 mdata$south <- 1 * (mdata$state.abb %in% st.list)
-mout <- cem("south", data = mdata[,mvars], drop = c("dem", "affirm", "resent"), k2k = TRUE)
+mout <- cem("south", data = mdata[,mvars], drop = c("dem", "affirm", "resent"))
 
 match.dem <- lm(update(base1860.form, dem ~ south + . - pslave1860 - state.abb), data = mdata, weights = sample.size, subset = mout$w > 0)
 
@@ -326,8 +322,9 @@ match.tab <- stargazer(cnty.res.neighbor, match.dem, cnty.aff.neighbor,
                                         ch.row("North-South Match", rep(c(FALSE,TRUE), 3)), 
                                         rep("", 7)), 
                        multicolumn = TRUE)
-
 ```
+Note. Model 1 is the first-stage relationship. Models 2–5 are weighted two-stage least-squares models, with weights as given in table 1. Standard errors are in parentheses.
+
 # Table 3
 ```{r t3, results = 'asis'}
 cnty.res.blk70.ptbias <- lm(update(base1860.form, dem ~ . + blkprop70), 
